@@ -1,18 +1,21 @@
-'use client'; // <-- Vital para usar hooks como useState y useRouter
+'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { apiFetch } from '@/lib/api'; // Asegúrate de que la ruta sea correcta
+import { useRouter, useSearchParams } from 'next/navigation'; // Importamos useSearchParams
 
 export default function LoginPage() {
-    // 1. Definimos los estados que usará el formulario
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
-    const router = useRouter();
 
-    // 2. La función de login que ya teníamos
+    const router = useRouter();
+    const searchParams = useSearchParams(); // Hook para leer la URL
+
+    // 1. Capturamos el destino del redirect. 
+    // Si no existe, por defecto enviamos al home '/'
+    const redirectTo = searchParams.get('redirect') || '/';
+
     const handleLogin = async (e) => {
         e.preventDefault();
         setError('');
@@ -34,14 +37,18 @@ export default function LoginPage() {
             const data = await response.json();
 
             if (!response.ok) {
-                // Manejo de errores de FastAPI
                 const errorMsg = data.detail || 'Error en el servidor';
                 throw new Error(typeof errorMsg === 'object' ? 'Datos inválidos' : errorMsg);
             }
 
-            // 3. Guardar token y redirigir
+            // 2. Guardar sesión
             localStorage.setItem('token', data.access_token);
-            router.push('/');
+            localStorage.setItem('email', data.email);
+            localStorage.setItem('level', data.level);
+
+            // 3. Redirección Inteligente
+            // Usamos decodeURIComponent para asegurarnos que la URL sea válida
+            router.push(decodeURIComponent(redirectTo));
 
         } catch (err) {
             setError(err.message);
@@ -50,18 +57,21 @@ export default function LoginPage() {
         }
     };
 
-    // 3. El JSX (lo que se ve en pantalla)
     return (
         <div className="flex min-h-screen items-center justify-center bg-gray-100 p-4">
-            <div className="w-full max-w-md bg-white p-8 rounded-lg shadow-md">
-                <h1 className="text-2xl font-bold text-center mb-6 text-gray-800">Iniciar Sesión</h1>
+            <div className="w-full max-w-md bg-white p-8 rounded-[2rem] shadow-xl border border-gray-100">
+                <div className="text-center mb-8">
+                    <h1 className="text-3xl font-black text-gray-900">Bienvenido</h1>
+                    <p className="text-gray-500 text-sm mt-2">Inicia sesión para continuar con tu reserva</p>
+                </div>
 
-                <form onSubmit={handleLogin} className="space-y-4">
+                <form onSubmit={handleLogin} className="space-y-5">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">Email</label>
+                        <label className="block text-sm font-bold text-gray-700 ml-1">Email</label>
                         <input
                             type="email"
-                            className="mt-1 w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-black"
+                            placeholder="tu@email.com"
+                            className="mt-1 w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition-all text-black"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                             required
@@ -69,24 +79,29 @@ export default function LoginPage() {
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">Contraseña</label>
+                        <label className="block text-sm font-bold text-gray-700 ml-1">Contraseña</label>
                         <input
                             type="password"
-                            className="mt-1 w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-black"
+                            placeholder="••••••••"
+                            className="mt-1 w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition-all text-black"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             required
                         />
                     </div>
 
-                    {error && <p className="text-red-500 text-sm">{error}</p>}
+                    {error && (
+                        <div className="bg-red-50 text-red-500 text-sm p-4 rounded-xl border border-red-100 animate-shake">
+                            {error}
+                        </div>
+                    )}
 
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full bg-blue-600 text-white py-2 rounded font-semibold hover:bg-blue-700 disabled:bg-blue-300 transition-colors"
+                        className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold hover:bg-indigo-700 disabled:bg-indigo-300 transition-all shadow-lg shadow-indigo-100 active:scale-[0.98]"
                     >
-                        {loading ? 'Entrando...' : 'Entrar'}
+                        {loading ? 'Validando datos...' : 'Entrar'}
                     </button>
                 </form>
             </div>
