@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation'; // Importamos useSearchParams
+import { useRouter, useSearchParams } from 'next/navigation';
 
 export default function LoginPage() {
     const [email, setEmail] = useState('');
@@ -10,10 +10,8 @@ export default function LoginPage() {
     const [loading, setLoading] = useState(false);
 
     const router = useRouter();
-    const searchParams = useSearchParams(); // Hook para leer la URL
+    const searchParams = useSearchParams();
 
-    // 1. Capturamos el destino del redirect. 
-    // Si no existe, por defecto enviamos al home '/'
     const redirectTo = searchParams.get('redirect') || '/';
 
     const handleLogin = async (e) => {
@@ -22,16 +20,21 @@ export default function LoginPage() {
         setLoading(true);
 
         try {
-            const params = new URLSearchParams({
-                email: email,
-                password: password
-            });
+            // 1. IMPORTANTE: El backend ahora espera 'username' y 'password' 
+            // codificados como x-www-form-urlencoded
+            const formData = new URLSearchParams();
+            formData.append('username', email); // FastAPI OAuth2 usa 'username'
+            formData.append('password', password);
 
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login?${params.toString()}`, {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
                 method: 'POST',
                 headers: {
+                    // Cambiamos el header para indicar que enviamos un formulario
+                    'Content-Type': 'application/x-www-form-urlencoded',
                     'Accept': 'application/json'
-                }
+                },
+                // El body es la cadena del formulario
+                body: formData.toString(),
             });
 
             const data = await response.json();
@@ -42,12 +45,12 @@ export default function LoginPage() {
             }
 
             // 2. Guardar sesión
+            // Nota: Verifica que tu backend devuelva 'user_email' según tu código de Python
             localStorage.setItem('token', data.access_token);
-            localStorage.setItem('email', data.email);
+            localStorage.setItem('email', data.user_email || email);
             localStorage.setItem('level', data.level);
 
             // 3. Redirección Inteligente
-            // Usamos decodeURIComponent para asegurarnos que la URL sea válida
             router.push(decodeURIComponent(redirectTo));
 
         } catch (err) {
@@ -91,7 +94,7 @@ export default function LoginPage() {
                     </div>
 
                     {error && (
-                        <div className="bg-red-50 text-red-500 text-sm p-4 rounded-xl border border-red-100 animate-shake">
+                        <div className="bg-red-50 text-red-500 text-sm p-4 rounded-xl border border-red-100">
                             {error}
                         </div>
                     )}
