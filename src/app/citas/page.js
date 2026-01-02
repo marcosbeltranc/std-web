@@ -4,6 +4,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/api';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import Navbar from '@/components/Navbar';
 import PaymentStep from '@/components/PaymentStep';
 import SuccessStep from '@/components/SuccessStep';
 
@@ -74,103 +75,106 @@ export default function MyAppointmentsPage() {
     };
 
     return (
-        <div className="max-w-4xl mx-auto p-6 pt-12 min-h-screen">
-            <header className="mb-8">
-                <h1 className="text-4xl font-black tracking-tighter text-gray-900 uppercase">Mis Reservas</h1>
-            </header>
+        <>
+            <Navbar />
+            <div className="max-w-4xl mx-auto p-6 pt-12 min-h-screen">
+                <header className="mb-8">
+                    <h1 className="text-4xl font-black tracking-tighter text-gray-900 uppercase">Mis Reservas</h1>
+                </header>
 
-            {/* TABS */}
-            <div className="flex gap-2 mb-8 overflow-x-auto pb-2 custom-scrollbar">
-                {tabs.map(tab => (
-                    <button
-                        key={tab.id}
-                        onClick={() => setActiveTab(tab.id)}
-                        className={`px-6 py-2 rounded-2xl text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap border-2 ${activeTab === tab.id
-                            ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100'
-                            : 'bg-white border-gray-100 text-gray-400 hover:border-gray-200'
-                            }`}
-                    >
-                        {tab.label}
-                    </button>
-                ))}
-            </div>
-
-            {loading ? (
-                <div className="py-20 flex justify-center"><div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div></div>
-            ) : filteredAppointments.length === 0 ? (
-                <div className="bg-gray-50 rounded-[2.5rem] p-16 text-center border-2 border-dashed border-gray-100 text-gray-400 font-bold uppercase text-xs tracking-widest">
-                    No hay citas en esta categoría
-                </div>
-            ) : (
-                <div className="grid gap-4">
-                    {filteredAppointments.map(appt => (
-                        <AppointmentCard
-                            key={appt.id}
-                            appt={appt}
-                            onPay={() => openPayment(appt)}
-                            onView={() => router.push(`/citas?id=${appt.id}`, { scroll: false })}
-                        />
+                {/* TABS */}
+                <div className="flex gap-2 mb-8 overflow-x-auto pb-2 custom-scrollbar">
+                    {tabs.map(tab => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id)}
+                            className={`px-6 py-2 rounded-2xl text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap border-2 ${activeTab === tab.id
+                                ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100'
+                                : 'bg-white border-gray-100 text-gray-400 hover:border-gray-200'
+                                }`}
+                        >
+                            {tab.label}
+                        </button>
                     ))}
                 </div>
-            )}
 
-            {/* MODAL DE PAGO */}
-            {showPaymentModal && (
-                <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
-                    <div className="bg-white rounded-[3rem] w-full max-w-lg p-8 relative overflow-hidden shadow-2xl">
-                        <button onClick={() => setShowPaymentModal(false)} className="absolute top-6 right-6 text-gray-400 hover:text-black z-20">
-                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
-                        </button>
+                {loading ? (
+                    <div className="py-20 flex justify-center"><div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div></div>
+                ) : filteredAppointments.length === 0 ? (
+                    <div className="bg-gray-50 rounded-[2.5rem] p-16 text-center border-2 border-dashed border-gray-100 text-gray-400 font-bold uppercase text-xs tracking-widest">
+                        No hay citas en esta categoría
+                    </div>
+                ) : (
+                    <div className="grid gap-4">
+                        {filteredAppointments.map(appt => (
+                            <AppointmentCard
+                                key={appt.id}
+                                appt={appt}
+                                onPay={() => openPayment(appt)}
+                                onView={() => router.push(`/citas?id=${appt.id}`, { scroll: false })}
+                            />
+                        ))}
+                    </div>
+                )}
 
-                        <div className="mt-4">
-                            {paymentStep === 1 ? (
-                                <PaymentStep
-                                    business={{ id: selectedAppt.business_id }}
-                                    service={selectedAppt.service}
-                                    selectedSlot={{ time: format(new Date(selectedAppt.start_time), "HH:mm") }}
-                                    selectedStaffId={selectedAppt.staff_id}
-                                    customDate={format(new Date(selectedAppt.start_time), "yyyy-MM-dd")}
-                                    paymentAmount={paymentAmount}
-                                    setPaymentAmount={setPaymentAmount}
-                                    minRequiredAmount={selectedAppt.required_deposit - selectedAppt.paid_amount}
-                                    onBack={() => setShowPaymentModal(false)}
-                                    onProcessing={setIsProcessing}
-                                    onSuccess={(newId) => {
-                                        if (newId) setConfirmedId(newId);
-                                        setPaymentStep(2);
-                                        fetchAppointments();
-                                    }}
-                                    isExistingAppointment={true}
-                                    appointmentId={selectedAppt.id}
-                                />
-                            ) : (
-                                <div className="py-10">
-                                    <SuccessStep
-                                        serviceName={selectedAppt.service.name}
-                                        appointmentId={confirmedId}
+                {/* MODAL DE PAGO */}
+                {showPaymentModal && (
+                    <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
+                        <div className="bg-white rounded-[3rem] w-full max-w-lg p-8 relative overflow-hidden shadow-2xl">
+                            <button onClick={() => setShowPaymentModal(false)} className="absolute top-6 right-6 text-gray-400 hover:text-black z-20">
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+
+                            <div className="mt-4">
+                                {paymentStep === 1 ? (
+                                    <PaymentStep
+                                        business={{ id: selectedAppt.business_id }}
+                                        service={selectedAppt.service}
+                                        selectedSlot={{ time: format(new Date(selectedAppt.start_time), "HH:mm") }}
+                                        selectedStaffId={selectedAppt.staff_id}
+                                        customDate={format(new Date(selectedAppt.start_time), "yyyy-MM-dd")}
+                                        paymentAmount={paymentAmount}
+                                        setPaymentAmount={setPaymentAmount}
+                                        minRequiredAmount={selectedAppt.required_deposit - selectedAppt.paid_amount}
+                                        onBack={() => setShowPaymentModal(false)}
+                                        onProcessing={setIsProcessing}
+                                        onSuccess={(newId) => {
+                                            if (newId) setConfirmedId(newId);
+                                            setPaymentStep(2);
+                                            fetchAppointments();
+                                        }}
+                                        isExistingAppointment={true}
+                                        appointmentId={selectedAppt.id}
                                     />
+                                ) : (
+                                    <div className="py-10">
+                                        <SuccessStep
+                                            serviceName={selectedAppt.service.name}
+                                            appointmentId={confirmedId}
+                                        />
+                                    </div>
+                                )}
+                            </div>
+
+                            {isProcessing && (
+                                <div className="absolute inset-0 bg-white/90 backdrop-blur-sm z-50 flex flex-col items-center justify-center">
+                                    <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">Procesando...</p>
                                 </div>
                             )}
                         </div>
-
-                        {isProcessing && (
-                            <div className="absolute inset-0 bg-white/90 backdrop-blur-sm z-50 flex flex-col items-center justify-center">
-                                <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-                                <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">Procesando...</p>
-                            </div>
-                        )}
                     </div>
-                </div>
-            )}
+                )}
 
-            {/* MODAL DE DETALLE (TICKET) */}
-            {selectedDetail && (
-                <AppointmentDetailModal
-                    appt={selectedDetail}
-                    onClose={closeDetail}
-                />
-            )}
-        </div>
+                {/* MODAL DE DETALLE (TICKET) */}
+                {selectedDetail && (
+                    <AppointmentDetailModal
+                        appt={selectedDetail}
+                        onClose={closeDetail}
+                    />
+                )}
+            </div>
+        </>
     );
 }
 

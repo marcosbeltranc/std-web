@@ -25,3 +25,4 @@ export default function RootLayout({ children }) {
     </html>
   );
 }
+<script src="https://sdk.mercadopago.com/js/v2"></script>

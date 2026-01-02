@@ -112,7 +112,7 @@ export default function Navbar() {
                         {user ? (
                             <div className="flex items-center gap-6">
                                 <Link
-                                    href="/profile"
+                                    href="/citas"
                                     className="text-sm font-medium text-gray-700 hover:text-indigo-600 transition-colors"
                                 >
                                     Mis Citas
