@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import Script from 'next/script';
 import { apiFetch } from '@/lib/api';
 
 export default function PaymentStep({
@@ -20,6 +21,7 @@ export default function PaymentStep({
     const [paymentMethods, setPaymentMethods] = useState([]);
     const [userData, setUserData] = useState(null);
     const [showBrick, setShowBrick] = useState(false); // Nuevo: Controla si mostramos el formulario de MP
+    const [sdkLoaded, setSdkLoaded] = useState(false);
 
     useEffect(() => {
         const loadInitialData = async () => {
@@ -40,7 +42,8 @@ export default function PaymentStep({
     // Lógica del Brick
     const initMPBrick = async (preferenceId, publicKey) => {
         if (!window.MercadoPago) {
-            console.error("Mercado Pago SDK no cargado");
+            console.error("Mercado Pago SDK no cargado aún");
+            alert("El sistema de pago se está cargando, por favor intenta de nuevo en un segundo.");
             return;
         }
 
@@ -135,7 +138,8 @@ export default function PaymentStep({
                 const mpCredential = paymentMethods.find(
                     (m) => m.name.toLowerCase() === 'mercadopago'
                 );
-
+                console.log(paymentMethods);
+                console.log(mpCredential);
                 const publicKey = mpCredential?.public_key;
 
                 if (!publicKey) {
@@ -161,6 +165,13 @@ export default function PaymentStep({
 
     return (
         <div className="h-full animate-in fade-in slide-in-from-right-4 duration-300">
+            <Script
+                src="https://sdk.mercadopago.com/js/v2"
+                onLoad={() => {
+                    console.log("MP SDK Cargado con éxito");
+                    setSdkLoaded(true);
+                }}
+            />
             {/* CARD DE MONTO */}
             <div className="bg-indigo-600 text-white p-6 rounded-[2.5rem] mb-6 shadow-xl shadow-indigo-100">
                 <p className="text-[10px] font-black uppercase opacity-60 mb-1 tracking-widest text-center">
