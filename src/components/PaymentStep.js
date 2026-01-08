@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Script from 'next/script';
 import { apiFetch } from '@/lib/api';
 
@@ -20,8 +20,11 @@ export default function PaymentStep({
 }) {
     const [paymentMethods, setPaymentMethods] = useState([]);
     const [userData, setUserData] = useState(null);
-    const [showBrick, setShowBrick] = useState(false); // Nuevo: Controla si mostramos el formulario de MP
+    const [showBrick, setShowBrick] = useState(false);
     const [sdkLoaded, setSdkLoaded] = useState(false);
+
+    // Usamos una ref para guardar el ID de la cita creada dinámicamente
+    const currentAppIdRef = useRef(appointmentId);
 
     useEffect(() => {
         const loadInitialData = async () => {
@@ -39,13 +42,8 @@ export default function PaymentStep({
         loadInitialData();
     }, [business.id]);
 
-    // Lógica del Brick
-    const initMPBrick = async (preferenceId, publicKey) => {
-        if (!window.MercadoPago) {
-            console.error("Mercado Pago SDK no cargado aún");
-            alert("El sistema de pago se está cargando, por favor intenta de nuevo en un segundo.");
-            return;
-        }
+    const initMPBrick = async (publicKey, paymentId) => {
+        if (!window.MercadoPago) return;
 
         const mp = new window.MercadoPago(publicKey, { locale: 'es-MX' });
         const bricksBuilder = mp.bricks();
@@ -53,33 +51,55 @@ export default function PaymentStep({
         const settings = {
             initialization: {
                 amount: parseFloat(paymentAmount),
-                preferenceId: preferenceId,
             },
             customization: {
                 paymentMethods: {
-                    ticket: "all",
-                    bankTransfer: "all",
                     creditCard: "all",
                     debitCard: "all",
                     mercadoPago: "all",
                 },
             },
             callbacks: {
-                onReady: () => {
-                    console.log("Brick ready");
-                    onProcessing(false);
-                },
-                onSubmit: ({ selectedPaymentMethod, formData }) => {
-                    console.log("Procesando pago...");
-                    // Mercado Pago procesa esto con el preferenceId automáticamente
+                onReady: () => onProcessing(false),
+                onSubmit: async ({ formData }) => {
+                    try {
+                        // Llamamos al endpoint de confirmación con el payment_id obtenido previamente
+                        const response = await apiFetch(`/payments/${paymentId}/confirm-mercadopago`, {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                token: formData.token,
+                                provider_payment_method_id: formData.payment_method_id,
+                                issuer_id: formData.issuer_id?.toString(),
+                                installments: formData.installments,
+                            })
+                        });
+
+                        if (response && response.status === 'approved') {
+                            onSuccess(currentAppIdRef.current);
+                        } else if (response && response.status === 'rejected') {
+                            alert("El pago fue rechazado. Por favor, intenta con otra tarjeta o revisa tus fondos.");
+                            onProcessing(false); // Detener el loader para permitir reintento
+                        } else {
+                            alert("Estado del pago: " + (response.status || 'Pendiente de validación'));
+                            onProcessing(false);
+                        }
+                    } catch (err) {
+                        console.error("Error en confirmación:", err);
+                        alert("Ocurrió un error al procesar el pago. Inténtalo de nuevo.");
+                        onProcessing(false);
+                    }
                 },
                 onError: (error) => {
-                    console.error("Error en Brick:", error);
-                    alert("Ocurrió un error al cargar el formulario de pago.");
+                    console.error("Error Brick:", error);
                     setShowBrick(false);
+                    onProcessing(false);
                 },
             },
         };
+
+        if (window.paymentBrickController) {
+            await window.paymentBrickController.unmount();
+        }
 
         window.paymentBrickController = await bricksBuilder.create(
             'payment',
@@ -96,9 +116,8 @@ export default function PaymentStep({
         onProcessing(true);
 
         try {
-            let currentAppointmentId = appointmentId;
-
-            if (!isExistingAppointment) {
+            // 1. Crear la cita si no existe
+            if (!isExistingAppointment && !currentAppIdRef.current) {
                 const timeWithSeconds = selectedSlot.time.split(':').length === 2
                     ? `${selectedSlot.time}:00`
                     : selectedSlot.time;
@@ -116,49 +135,44 @@ export default function PaymentStep({
                 });
 
                 if (!appointment) throw new Error("No se pudo crear la cita.");
-                currentAppointmentId = appointment.id;
+                currentAppIdRef.current = appointment.id;
             }
 
-            const payData = await apiFetch('/payments', {
+            // 2. Crear la Intención de Pago (Aplica para ambos métodos)
+            const paymentIntent = await apiFetch('/payments', {
                 method: 'POST',
                 body: JSON.stringify({
-                    appointment_id: currentAppointmentId,
+                    appointment_id: currentAppIdRef.current,
                     amount: parseFloat(paymentAmount),
                     payment_method_type: methodName,
-                    description: `Pago de reserva: ${service.name}`,
-                    status: "pending"
+                    description: `Pago ${methodName}: ${service.name}`
                 })
             });
 
-            // LOGICA PARA MERCADO PAGO
-            if (methodName.toLowerCase() === 'mercadopago' && payData?.external_id) {
-                const preferenceId = payData.external_id;
+            if (!paymentIntent) throw new Error("No se pudo registrar la intención de pago.");
 
-                // Buscamos la public_key en los métodos cargados al inicio
-                const mpCredential = paymentMethods.find(
-                    (m) => m.name.toLowerCase() === 'mercadopago'
-                );
-                console.log(paymentMethods);
-                console.log(mpCredential);
-                const publicKey = mpCredential?.public_key;
+            // 3. Diferenciar flujo Digital vs Manual
+            const isMP = methodName.toLowerCase().replace(/\s/g, '') === 'mercadopago';
 
-                if (!publicKey) {
-                    throw new Error("Llave pública de Mercado Pago no encontrada.");
-                }
+            if (isMP) {
+                const mpMethod = paymentMethods.find(m => m.name.toLowerCase().includes('mercado'));
+                const publicKey = mpMethod?.public_key;
 
-                setShowBrick(true); // Ocultamos los botones normales
+                if (!publicKey) throw new Error("Llave pública de Mercado Pago no configurada.");
+
+                setShowBrick(true);
+                // Pequeño delay para asegurar que el contenedor DOM esté listo
                 setTimeout(() => {
-                    initMPBrick(preferenceId, publicKey);
-                }, 100); // Pequeño delay para asegurar que el div contenedor exista
-
-                return;
+                    initMPBrick(publicKey, paymentIntent.id);
+                }, 200);
+            } else {
+                // Si es manual (Efectivo/Transfer), el backend ya lo puso como completed
+                onSuccess(currentAppIdRef.current);
             }
 
-            onSuccess(currentAppointmentId);
-
         } catch (err) {
-            console.error("Error en proceso:", err);
-            alert(err.message || "Error al procesar el pago.");
+            console.error("Error en flujo de pago:", err);
+            alert(err.message || "Error al procesar.");
             onProcessing(false);
         }
     };
@@ -167,15 +181,13 @@ export default function PaymentStep({
         <div className="h-full animate-in fade-in slide-in-from-right-4 duration-300">
             <Script
                 src="https://sdk.mercadopago.com/js/v2"
-                onLoad={() => {
-                    console.log("MP SDK Cargado con éxito");
-                    setSdkLoaded(true);
-                }}
+                onLoad={() => setSdkLoaded(true)}
             />
+
             {/* CARD DE MONTO */}
             <div className="bg-indigo-600 text-white p-6 rounded-[2.5rem] mb-6 shadow-xl shadow-indigo-100">
                 <p className="text-[10px] font-black uppercase opacity-60 mb-1 tracking-widest text-center">
-                    {isExistingAppointment ? "Completar Pago" : "Monto a pagar ahora"}
+                    Monto a pagar
                 </p>
                 <div className="flex items-center justify-center gap-1">
                     <span className="text-3xl font-black">$</span>
@@ -183,56 +195,48 @@ export default function PaymentStep({
                         type="number"
                         className="bg-transparent text-4xl font-black outline-none w-32 text-center"
                         value={paymentAmount}
-                        disabled={showBrick} // Deshabilitar si ya se está pagando
+                        disabled={showBrick}
                         onChange={(e) => setPaymentAmount(e.target.value)}
                     />
                 </div>
             </div>
 
-            {/* CONTENEDOR DEL BRICK (Solo se llena cuando showBrick es true) */}
-            <div id="paymentBrick_container" className={`${!showBrick ? 'hidden' : 'mb-4'}`}></div>
+            {/* CONTENEDOR DEL BRICK */}
+            <div
+                id="paymentBrick_container"
+                className={`${!showBrick ? 'hidden' : 'mb-4'}`}
+            ></div>
 
-            {/* SELECCIÓN DE MÉTODOS (Se oculta si el Brick está activo) */}
+            {/* SELECCIÓN DE MÉTODOS */}
             {!showBrick && (
-                <>
-                    <p className="text-[10px] font-black uppercase text-gray-400 mb-4 px-2 tracking-widest text-center">Selecciona Método</p>
-                    <div className="grid gap-3">
-                        {paymentMethods.map((m) => (
-                            <button
-                                key={m.id}
-                                onClick={() => handleConfirm(m.name.trim())}
-                                className="flex items-center justify-between p-5 bg-white border-2 border-gray-100 rounded-3xl hover:border-indigo-600 hover:bg-indigo-50/30 transition-all group"
-                            >
-                                <span className="font-bold text-gray-700">{m.name}</span>
-                                <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="3" d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
-                                </div>
-                            </button>
-                        ))}
-                    </div>
-                </>
+                <div className="grid gap-3">
+                    {paymentMethods.map((m) => (
+                        <button
+                            key={m.id}
+                            onClick={() => handleConfirm(m.name)}
+                            className="flex items-center justify-between p-5 bg-white border-2 border-gray-100 rounded-3xl hover:border-indigo-600 transition-all group"
+                        >
+                            <span className="font-bold text-gray-700">{m.name}</span>
+                            <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeWidth="3" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                                </svg>
+                            </div>
+                        </button>
+                    ))}
+                </div>
             )}
 
-            {/* BOTONES DE CONTROL */}
-            {showBrick ? (
+            {showBrick && (
                 <button
                     onClick={() => {
                         setShowBrick(false);
                         if (window.paymentBrickController) window.paymentBrickController.unmount();
                     }}
-                    className="w-full mt-4 text-[10px] font-black text-red-400 hover:text-red-600 uppercase tracking-widest transition-colors"
+                    className="w-full mt-4 text-[10px] font-black text-red-400 uppercase tracking-widest"
                 >
-                    ✕ Cancelar pago electrónico
+                    ✕ Cancelar y volver
                 </button>
-            ) : (
-                !isExistingAppointment && (
-                    <button
-                        onClick={onBack}
-                        className="w-full mt-8 text-[10px] font-black text-gray-400 hover:text-indigo-600 uppercase tracking-widest transition-colors"
-                    >
-                        ← Volver a selección de horario
-                    </button>
-                )
             )}
         </div>
     );
