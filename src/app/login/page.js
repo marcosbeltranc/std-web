@@ -61,20 +61,35 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-gray-100 p-4">
-            <div className="w-full max-w-md bg-white p-8 rounded-[2rem] shadow-xl border border-gray-100">
+        <div className="relative min-h-screen flex items-center justify-center p-4 overflow-hidden">
+
+            {/* --- LUGAR PARA LA IMAGEN DE FONDO --- */}
+            <div
+                className="absolute inset-0 z-0"
+                style={{
+                    backgroundImage: 'url("/images/bg.jpg")',
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                }}
+            >
+                {/* Overlay para que el texto y el form resalten */}
+                <div className="absolute inset-0 bg-black/1 backdrop-blur-xs"></div>
+            </div>
+
+            {/* Contenedor del Form (Añadimos z-10 para que esté arriba del fondo) */}
+            <div className="relative z-10 w-full max-w-md bg-white/95 p-8 rounded-[2.5rem] shadow-2xl border border-white/20 backdrop-blur-md">
                 <div className="text-center mb-8">
                     <h1 className="text-3xl font-black text-gray-900">Bienvenido</h1>
                     <p className="text-gray-500 text-sm mt-2">Inicia sesión para continuar con tu reserva</p>
                 </div>
 
                 <form onSubmit={handleLogin} className="space-y-5">
+                    {/* ... (tus inputs se mantienen igual) ... */}
                     <div>
                         <label className="block text-sm font-bold text-gray-700 ml-1">Email</label>
                         <input
                             type="email"
-                            placeholder="tu@email.com"
-                            className="mt-1 w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition-all text-black"
+                            className="mt-1 w-full p-4 bg-gray-50/50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition-all text-black"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                             required
@@ -85,8 +100,7 @@ export default function LoginPage() {
                         <label className="block text-sm font-bold text-gray-700 ml-1">Contraseña</label>
                         <input
                             type="password"
-                            placeholder="••••••••"
-                            className="mt-1 w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition-all text-black"
+                            className="mt-1 w-full p-4 bg-gray-50/50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition-all text-black"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             required
@@ -102,7 +116,7 @@ export default function LoginPage() {
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold hover:bg-indigo-700 disabled:bg-indigo-300 transition-all shadow-lg shadow-indigo-100 active:scale-[0.98]"
+                        className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold hover:bg-indigo-700 disabled:bg-indigo-300 transition-all shadow-lg shadow-indigo-200 active:scale-[0.98]"
                     >
                         {loading ? 'Validando datos...' : 'Entrar'}
                     </button>

@@ -23,7 +23,7 @@ export default function BusinessDetailPage() {
     // 1. Cargar información del negocio
     const loadBusiness = useCallback(async () => {
         try {
-            const data = await apiFetch(`/businesses/${slug}`);
+            const data = await apiFetch(`/businesses/profile/${slug}`);
             if (data) setBusiness(data);
         } catch (err) {
             console.error("Error al cargar negocio:", err);
